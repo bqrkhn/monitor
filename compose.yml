@@ -16,7 +16,6 @@ services:
     command: ['sh', '-c', 'chown -R 1000:1000 /prometheus']
     volumes:
       - prometheus-data:/prometheus
-    entrypoint: ['sh', '-c', 'chown -R 1000:1000 /prometheus']
     restart: 'no'
     networks:
       - monitor
