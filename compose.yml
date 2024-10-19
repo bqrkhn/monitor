@@ -1,0 +1,88 @@
+---
+version: '3.3'
+
+networks:
+  monitor:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  grafana-provisioning:
+
+services:
+  init-prometheus-permissions:
+    image: busybox
+    command: ['sh', '-c', 'chown -R 1000:1000 /prometheus']
+    volumes:
+      - prometheus-data:/prometheus
+    entrypoint: ['sh', '-c', 'chown -R 1000:1000 /prometheus']
+    restart: 'no'
+    networks:
+      - monitor
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    user: '$UID:$GID'
+    restart: unless-stopped
+    depends_on:
+      - init-prometheus-permissions
+    volumes:
+      - './prometheus.yml:/etc/prometheus/prometheus.yml'
+      - 'prometheus-data:/prometheus'
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - monitor
+  grafana:
+    image: grafana/grafana:latest
+    user: '$UID:$GID'
+    container_name: grafana
+    restart: unless-stopped
+    volumes:
+      - 'grafana-data:/var/lib/grafana'
+      - 'grafana-provisioning:/etc/grafana/provisioning'
+    environment:
+      - GF_PATHS_DATA=/var/lib/grafana
+      - GF_PATHS_LOGS=/var/log/grafana
+    networks:
+      - monitor
+    ports:
+      - '8080:3000'
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    user: '$UID:$GID'
+    expose:
+      - 9100
+    volumes:
+      - '/proc:/host/proc:ro'
+      - '/sys:/host/sys:ro'
+      - '/:/rootfs:ro'
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: unless-stopped
+    networks:
+      - monitor
+
+  cadvisor:
+    container_name: cadvisor
+    image: gcr.io/cadvisor/cadvisor:latest
+    expose:
+      - 8080
+    volumes:
+      - '/:/rootfs'
+      - '/var/run/docker.sock:/var/run/docker.sock:rw'
+      - '/sys:/sys'
+      - '/var/lib/docker/:/var/lib/docker'
+      - '/dev/disk/:/dev/disk'
+    privileged: true
+    devices:
+      - '/dev/kmsg'
+    networks:
+      - monitor
